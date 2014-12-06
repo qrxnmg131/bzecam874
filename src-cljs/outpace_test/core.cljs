@@ -62,15 +62,16 @@
   (get numbers s "?"))
 
 (defn- lines->numbers
-  "Converts an account number from pipes/underscores to a string."
+  "Converts an account number from pipes/underscores to a string of numbers.
+   '?' if the number is not recognized."
   [lines]
   (let [row-1 (partition-all 3 (first lines))
         row-2 (partition-all 3 (second lines))
-        row-3 (partition-all 3 (nth lines 2))
-        numbers-1 (map concat row-1 row-2 row-3)
-        numbers-2 (map #(apply str %) numbers-1)
-        numbers-3 (map str->number numbers-2)]
-    (apply str numbers-3)))
+        row-3 (partition-all 3 (nth lines 2))]
+    (->> (map concat row-1 row-2 row-3)
+         (map #(apply str %))
+         (map str->number)
+         (apply str))))
 
 ;;------------------------------------------------------------------------------
 ;; Validate Account Numbers
