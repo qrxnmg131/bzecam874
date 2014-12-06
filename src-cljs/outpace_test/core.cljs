@@ -1,9 +1,7 @@
 (ns outpace-test.core
   (:require
-    [clojure.string :refer [split-lines]]
+    [clojure.string :refer [blank? split split-lines]]
     [outpace-test.util :refer [js-log log]]))
-
-(enable-console-print!)
 
 ;;------------------------------------------------------------------------------
 ;; Node libraries
@@ -57,12 +55,89 @@
        "|_|") 0 })
 
 ;;------------------------------------------------------------------------------
-;; Parse
+;; Convert Pipes and Underscores to Numbers
 ;;------------------------------------------------------------------------------
 
-(defn- parse-file [file-contents]
-  ;;(log (split-lines file-contents))
-  )
+(defn- str->number [s]
+  (get numbers s "?"))
+
+(defn- lines->numbers
+  "Converts an account number from pipes/underscores to a string."
+  [lines]
+  (let [row-1 (partition-all 3 (first lines))
+        row-2 (partition-all 3 (second lines))
+        row-3 (partition-all 3 (nth lines 2))
+        numbers-1 (map concat row-1 row-2 row-3)
+        numbers-2 (map #(apply str %) numbers-1)
+        numbers-3 (map str->number numbers-2)]
+    (apply str numbers-3)))
+
+;;------------------------------------------------------------------------------
+;; Validate Account Numbers
+;;------------------------------------------------------------------------------
+
+(def account-number-length 9)
+
+(defn- valid-account-number-format?
+  "Is the account number in a valid format?"
+  [s]
+  (and (string? s)
+       (= (count s) account-number-length)
+       (= -1 (.indexOf s "?"))))
+
+(defn- valid-account-number-checksum?
+  "Does the account number have a valid checksum?
+   NOTE: this function assumes an account number in a valid format"
+  [s]
+  (let [sum (->> (split s "")
+                 (map int)
+                 reverse
+                 (map-indexed #(* (inc %1) %2))
+                 (apply +))]
+    (zero? (mod sum 11))))
+
+(defn- flag-invalid-accounts
+  "Flag accounts that have an invalid format or checksum."
+  [n]
+  (cond
+    (not (valid-account-number-format? n))
+      (str n " ILL")
+    (not (valid-account-number-checksum? n))
+      (str n " ERR")
+    :else n))
+
+;;------------------------------------------------------------------------------
+;; Parse File
+;;------------------------------------------------------------------------------
+
+(def expected-line-length 27)
+
+;; my text editor removes trailing whitespace by default
+;; this function pads spaces to the right of each line
+(defn- ensure-line-length [line]
+  (let [len (count line)]
+    (if-not (= len expected-line-length)
+      (str line (apply str (repeat (- expected-line-length len) " ")))
+      line)))
+
+(defn- parse-accounts
+  "Returns a sequence of account numbers."
+  [file-contents]
+  (->> file-contents
+    ;; split on new lines
+    split-lines
+
+    ;; make sure all the lines have the same length
+    (map ensure-line-length)
+
+    ;; split every 4 lines
+    (partition-all 4)
+
+    ;; join lines so that each account number is a string
+    (map lines->numbers)
+
+    ;; flag account numbers for invalid numbers and checksums
+    (map flag-invalid-accounts)))
 
 ;;------------------------------------------------------------------------------
 ;; Main
@@ -78,6 +153,8 @@
       (not (.existsSync fs filename))
         (js-log (str "Could not find file: " filename "\nExiting..."))
       :else
-        (parse-file (.readFileSync fs filename read-file-opts)))))
+        (let [file-contents (.readFileSync fs filename read-file-opts)
+              account-numbers (parse-accounts file-contents)]
+          (doall (map js-log account-numbers))))))
 
 (set! *main-cli-fn* -main)
